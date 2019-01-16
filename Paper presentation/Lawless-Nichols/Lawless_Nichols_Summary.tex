@@ -1,0 +1,403 @@
+\documentclass[a4paper,10pt]{article}
+
+\usepackage[a4paper, includeheadfoot, margin=2.54cm]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{bbold} % Identity vector
+\usepackage{breakcites} % Break citations to avoid overflow
+\usepackage{tabularx}
+%\usepackage{algorithm}
+
+\setlength\parindent{0pt} % No indent
+
+\newcommand{\ML}{\mathcal L}
+\newcommand{\MN}{\mathcal N}
+\newcommand{\MM}{\mathcal M}
+\newcommand{\MH}{\mathcal H}
+\newcommand{\MJ}{\mathcal J}
+
+\newcommand{\BX}{{\boldsymbol X}}
+\newcommand{\BR}{{\mathbf R}}
+\newcommand{\BB}{{\mathbf B}}
+\newcommand{\BH}{{\mathbf H}}
+\newcommand{\BM}{{\mathbf M}}
+\newcommand{\BU}{{\mathbf U}}
+\newcommand{\BV}{{\mathbf V}}
+\newcommand{\BI}{{\mathbf I}}
+\newcommand{\bx}{{\boldsymbol x}}
+\newcommand{\by}{{\boldsymbol y}}
+\newcommand{\bz}{{\boldsymbol z}}
+\newcommand{\bh}{{\boldsymbol h}}
+\newcommand{\bw}{{\boldsymbol w}}
+\newcommand{\bp}{{\boldsymbol p}}
+\newcommand{\bd}{{\boldsymbol d}}
+\newcommand{\bet}{{\boldsymbol \eta}}
+\newcommand{\bep}{{\boldsymbol \epsilon}}
+
+\newcommand{\hx}{\hat \bx}
+\newcommand{\hd}{\hat \bd}
+\newcommand{\HM}{\hat \BM}
+\newcommand{\HH}{\hat \BH}
+\newcommand{\HB}{\hat \BB}
+
+\newcommand{\dx}{\delta \bx}
+\newcommand{\dd}{\delta \bd}
+\newcommand{\dhx}{\delta \hx}
+\newcommand{\dhd}{\delta \hd}
+
+\newcommand{\TJ}{\widetilde{\MJ}}
+\newcommand{\HJ}{\hat{\MJ}}
+
+\newcommand{\bxstep}[1]{\bx^{(#1)}}
+\newcommand{\dxstep}[1]{\dx^{(#1)}}
+\newcommand{\bdstep}[1]{\bd^{(#1)}}
+\newcommand{\dhxstep}[1]{\dhx^{(#1)}}
+\newcommand{\bxz}{\bxstep{0}}
+\newcommand{\bxk}{\bxstep{k}}
+\newcommand{\dxz}{\dxstep{0}}
+\newcommand{\dxk}{\dxstep{k}}
+\newcommand{\bdz}{\bdstep{0}}
+\newcommand{\bdk}{\bdstep{k}}
+\newcommand{\dhxk}{\dhxstep{k}}
+\newcommand{\TJk}{\TJ^{(k)}}
+\newcommand{\HJk}{\HJ^{(k)}}
+
+\newcommand{\mathN}{\mathbb{N}}
+\newcommand{\mathZ}{\mathbb{Z}}
+\newcommand{\mathQ}{\mathbb{Q}}
+\newcommand{\mathR}{\mathbb{R}}
+\newcommand{\mathC}{\mathbb{C}}
+
+\newcommand{\mathRpi}{\mathR^{p_i}}
+
+\newcommand{\izton}{i \in \{0, \dots, N\}}
+\newcommand{\ioton}{i \in \{1, \dots, N\}}
+\newcommand{\iztonn}{i \in \{0, \dots, N-1\}}
+\newcommand{\sumin}{\sum_{i=0}^{N}}
+
+%opening
+\title{Inverse Methods and Data Assimilation\\Paper reading -- \cite{lawless2008}}
+\author{Hubert Leterme}
+
+\begin{document}
+
+\maketitle
+
+%\tableofcontents
+
+\section{Introduction}
+
+This is a summary of \cite{lawless2008}, which introduces a low-order approximation of incremental 4D-Var procedure, which itself is a linearized version of the original 4D-Var algorithm.
+
+The goal is to build a computationally affordable algorithm for data assimilation (e.g. for use in meteorology), while keeping track of the most important properties of the true model. This is not always the case in current implementations, which base their approximations on practical considerations, with a high risk of losing information.
+
+\section{Background on Incremental 4D-Var}
+
+\subsection{Notations}
+
+Given $n \in \mathN$ (dimension of the problem) and $N \in \mathN$ (number of time steps), we consider the following dynamical system:
+
+\begin{itemize}
+	\item For any $\izton$, let's denote:
+	\begin{itemize}
+		\item $\bx_i \in \mathR^n$: estimated state vector at time $t_i$;
+		
+		\item $\bx_i^* \in \mathR^n$: (unknown) true state vector at time $t_i$;
+		
+		\item $\MM_i : \mathR^n \rightarrow \mathR^n$ ($i \leq N-1$): nonlinear model operator, assumed perfect:
+		\begin{equation}
+		\label{eq:model}
+		\begin{cases}
+			\bx_{i+1} = \MM_i(\bx_i) \\
+			\bx_{i+1}^* = \MM_i(\bx_i^*)
+		\end{cases}
+		\end{equation}
+		
+		\item $\by_i \in \mathRpi$: imperfect observation of $\bx_i^*$;
+		
+		\item $\MH_i: \mathR^n \rightarrow \mathRpi$: operator mapping the state vectors $\bx_i$ and $\bx_i^*$ to the observation space;
+		
+		\item $\bet_i \in \mathRpi$: observation error, assumed unbiased and serially uncorrelated to the others:
+		\begin{equation}
+		\label{eq:obs_err}
+			\bet_i = \by_i - \MH_i(\bx_i^*)
+		\end{equation}
+		
+		\item $\BR_i \in \mathRpi \times \mathRpi$: covariance matrix of the observation error;
+		
+		\item $\bd_i \in \mathRpi$: innovation vector:
+		\begin{equation}
+		\label{eq:innov}
+		\bd_i = \by_i - \MH_i(\bx_i)
+		\end{equation}
+	\end{itemize}
+
+	\item Let $\bx^b \in \mathR^n$ denote a background estimate of $\bx_0^*$ with error $\bep^b$. We assume $\bep^b$ to be the realization of a Gaussian vector with mean $\boldsymbol 0$ (unbiased estimate) and covariance matrix $\BB_0 \in \mathR^n \times \mathR^n$.
+	
+	\item Finally, let $\bx^a$ denote the analysis, i.e. the value of $\bx_0$ output by the 4D-Var algorithm.
+\end{itemize}
+
+Among the quantities defined above, $\bx_i^*$, $\bet_i$ and $\bep^b$ are unknown; $\MM_i$, $\MH_i$, $\BR_i$, $\bx^b$ and $\BB_0$ are fixed and estimated from our knowledge of the system and $\by_i$ are given as input. Then, $\bx_i$ and $\bd_i$ will be updated at each iteration of the 4D-Var algorithm, and the output is $\bx^a$.
+
+\subsection{Linearization of the system}
+
+Let $\dx_0$ denote a small perturbation of the initial state $\bx_0$. Then, for any $\iztonn$, let $\dx_{i+1}$ denote the propagation of this initial perturbation through the model, i.e.:
+\begin{equation}
+\label{eq:propag}
+	\dx_{i+1} = \MM_i(\bx_i + \dx_i) - \bx_{i+1}
+\end{equation}
+
+For any $\izton$, let also $\dd_i$ denote the innovation gap when applying this perturbation:
+\begin{equation}
+\label{eq:innov_gap}
+\dd_i = (\by_i - \MH_i(\bx_i + \dx_i)) - \bd_i
+\end{equation}
+
+Then, for each $\izton$, the nonlinear equations \eqref{eq:model} and \eqref{eq:innov} can be linearized around the state vector $\bx_i$ by using Taylor expansions (see details in appendix):
+\begin{equation}
+\label{eq:lin_model_1}
+	\dx_{i+1} = \BM_i \dx_i
+\end{equation}
+\begin{equation}
+\label{eq:lin_model_2}
+	\dd_i = \BH_i \dx_i
+\end{equation}
+where $\BM_i$ and $\BH_i$ denote the tangent linear operators (i.e. the Jacobian matrices) of $\MM_i$ and $\MH_i$ at $\bx_i$.
+
+\subsection{Original versus Incremental 4D-Var algorithms}
+
+Both algorithm work under the assumption that the model is perfect. Thus the only value to infer is the initial state $\bx_0$. The subsequent states will then be deduced by successively applying the model $\MM_i$.
+
+The original 4D-Var algorithm consists in minimizing a \textbf{non-quadratic} cost function which accounts for both the errors made with respect to the background and to the observations:
+\begin{equation}
+\label{eq:cost_fun}
+\begin{split}
+	\MJ(\bx_0)
+		& = \frac{1}{2} (\bx_0 - \bx^b)^\top \BB_0^{-1} (\bx_0 - \bx^b) \\
+		& \quad + \frac{1}{2} \sumin (\MH(\bx_i) - \by_i)^\top \BR_i^{-1} (\MH_i(\bx_i) - \by_i)
+\end{split}
+\end{equation}
+where $\forall \ioton, \bx_i = \MM_{i-1}(\MM_{i-2}(\dots\MM_0(\bx_0)))$.
+\vspace{10pt}
+
+The incremental 4D-Var algorithm actually performs several gradient descent procedures. At each iteration, an approximate quadratic cost function over $\dx_0$ is computed and minimized, and the initial value $\bx_0$ is updated. Let's define this cost function, given a fixed $\bx_0$ inferred at previous iteration:
+\begin{equation}
+\label{eq:cost_quad}
+\begin{split}
+	\TJ(\dx_0)
+		& = \MJ(\bx_0 + \dx_0) \mbox{ (by definition)} \\
+		& = \frac{1}{2} \left(\dx_0 - (\bx^b - \bx_0)\right)^\top \BB_0^{-1} \left(\dx_0 - (\bx^b - \bx_0)\right) \\
+		& \quad + \frac{1}{2} \sumin (\BH_i \dx_i - \bd_i)^\top \BR_i^{-1} (\BH_i \dx_i - \bd_i)
+\end{split}
+\end{equation}
+where $\forall \ioton, \dx_i = \BM_{i-1} \BM_{i-2} \dots \BM_0 \: \dx_0$.
+\vspace{10pt}
+
+As we can see, all the non-linear operators have been removed from this cost function. This expression is easily obtained by developing $\MJ(\bx_0 + \dx_0)$ from \eqref{eq:cost_fun} and then using \eqref{eq:innov_gap} and \eqref{eq:lin_model_2}.
+
+\textbf{N.B.:} This model works only if $\dx_0$ remains small. For that reason, the algorithm must be initialized to a state that isn't too far away from the true state.
+\vspace{10pt}
+
+For sake of comparison, both the original and incremental 4D-Var algorithms are detailed in table \ref{tab:4dvar}.
+\vspace{10pt}
+
+\begin{table}[ht]
+	\begin{tabularx}{\textwidth}{XX}
+		\textbf{4D-Var} & \textbf{Incremental 4D-Var} \\
+		\hline
+		\begin{enumerate}
+			\item Initialization: $\bxz = \bx^b$
+			
+			\item Do:
+			\begin{enumerate}
+				\item For each $\ioton$, compute $\bx_i$ acc. to \eqref{eq:model} and $\bd_i$ acc. to \eqref{eq:innov}.
+				
+				\item Use a gradient descent algorithm to minimize the cost function $\MJ$ with respect to $\bx_0$. This may be computationally very expensive if the model is non-linear.
+			\end{enumerate}
+			
+			\item Output: $\bx^a = \bx_0$
+		\end{enumerate}  &
+		\begin{enumerate}
+			\item Initialization: $\bxz = \bx^b$
+			
+			\item Repeat for $k = 0 \dots K-1$:
+			\begin{enumerate}
+				\item For each $\ioton$, compute $\bxk_i$ acc. to \eqref{eq:model} and $\bdk_i$ acc. to \eqref{eq:innov}.
+				
+				\item Use a gradient descent algorithm to minimize the quadratic cost function $\TJk$ with respect to $\dxk_0$ ($\TJk$ is defined for $\bx_0 = \bxk_0$). 
+				
+				%As shown in \eqref{eq:cost_quad}, $\TJk$ is defined for the initial state inferred at the previous iteration, $\bxk_0$.
+				%Note that at each iteration $k$, the cost function $\TJ$ is recomputed since it is defined for a different value of $\bx_0$.
+				
+				\item Update $\bxstep{k+1}_0 = \bxk_0 + \dxk_0$.
+			\end{enumerate}
+		
+			\item Output: $\bx^a = \bxstep{K}_0$
+		\end{enumerate} \\
+		\hline
+	\end{tabularx}
+	\caption{Original and Incremental 4D-Var algorithms}
+	\label{tab:4dvar}
+\end{table}
+
+\section{Using Model Reduction in this context}
+
+In practice this algorithm is still computationally too expensive. The article introduces model reduction methods applied to the 4D-Var algorithm.
+
+\subsection{Notations}
+
+Given the previously defined dynamical system and $r \in \mathN$ (dimension of the reduced space) such that $r \ll n$, we consider a reduced system where the $n$-dimensional inferred state vectors are still denoted $\bx_0, \dots, \bx_N$ and innovation vectors $\bd_0, \dots, \bd_N$. Moreover, we introduce the following quantities:
+
+\begin{itemize}
+	\item For any $\izton$, let's denote:
+	\begin{itemize}
+		\item $\BU_i \in \mathR^{n \times r}$: linear restriction operator
+		
+		\item $\BV_i \in \mathR^{n \times r}$: prolongation operator that maps from the lower-dimensional space $\mathR^r$ to the original space $\mathR^n$, defined such that:
+		\begin{equation}
+		\label{eq:prol_op}
+			\BU_i^\top \BV_i = \BI_r
+		\end{equation}
+		
+		\item $\dhx_i \in \mathR^r$: projection of $\dx_i$ into the reduced space such that:
+		\begin{equation}
+		\label{eq:restr_op}
+			\dhx_i = \BU_i^\top \dx_i
+		\end{equation}
+		
+		\item $\HM_i \in \mathR^{r \times r}$ and $\HH_i \in \mathR^{p_i \times r}$: simplified dynamic and observation operators defined by:
+		\begin{equation}
+		\label{eq:simpl_dyn_obs}
+		\begin{cases}
+			\HM_i = \BU_i^\top \BM_i \BV_i \\
+			\HH_i = \BH_i \BV_i
+		\end{cases}
+		\end{equation}
+		
+		\item $\dhd_i \in \mathR^{p_i	}$: innovation gap obtained by using the reduced model, defined by:
+		\begin{equation}
+		\label{eq:innov_gap_restr}
+			\dhd_i = (\by_i - \MH_i(\bx_i + \BV_i \dhx_i)) - \bd_i
+		\end{equation}
+		where $\BV_i \dhx_i$ can be interpreted as an estimation of the state perturbation $\dx_i$, based on the lower-dimensional vector $\dhx_i$. To be compared with \eqref{eq:innov_gap}.
+	\end{itemize}
+
+	\item $\HB_0 \in \mathR^{r \times r}$: background error covariance matrix in the reduced space.
+\end{itemize}
+
+\subsection{Restricted linear system}
+
+Then we can write a restricted version of the linear system \eqref{eq:lin_model_1}, \eqref{eq:lin_model_2} in $\mathR^r$:
+\begin{equation}
+\label{eq:restr_model_1}
+	\dhx_{i+1} = \HM_i \dhx_i
+\end{equation}
+\begin{equation}
+\label{eq:restr_model_2}
+	\dhd_i = \HH_i \dhx_i
+\end{equation}
+
+The proof is given in appendix.
+
+\subsection{Restricted Incremental 4D-Var algorithm}
+
+At each iteration of the algorithm, the minimization is performed in the lower-dimensional space with respect to $\dhx_0$. The cost function is actually very similar to the one defined in \eqref{eq:cost_quad}. Given a fixed $\bx_0$ inferred at previous iteration, it writes:
+\begin{equation}
+\begin{split}
+	\HJ(\dhx_0)
+		& = \frac{1}{2} \left(\dhx_0 - \BU_0^\top (\bx^b - \bx_0)\right)^\top \HB_0^{-1} \left(\dhx_0 - \BU_0^\top (\bx^b - \bx_0)\right) \\
+		& \quad + \frac{1}{2} \sumin (\HH_i \dhx_i - \bd_i)^\top \BR_i^{-1} (\HH_i \dhx_i - \bd_i)
+\end{split}
+\end{equation}
+
+For sake of comparison, both the full and restricted incremental 4D-Var algorithms are detailed in table \ref{tab:4dvar_restr} below.
+\vspace{10pt}
+
+\begin{table}[ht]
+	\begin{tabularx}{\textwidth}{XX}
+		\textbf{Incremental 4D-Var} & \textbf{Restricted Incremental 4D-Var} \\
+		\hline
+		\begin{enumerate}
+			\item Initialization: $\bxz = \bx^b$
+			
+			\item Repeat for $k = 0 \dots K-1$:
+			\begin{enumerate}
+				\item For each $\ioton$, compute $\bxk_i$ acc. to \eqref{eq:model} and $\bdk_i$ acc. to \eqref{eq:innov}.
+				
+				\item Use a gradient descent algorithm to minimize the \emph{full} cost function $\TJk$ with respect to $\dxk_0$ ($\TJk$ is defined for $\bx_0 = \bxk_0$). 
+				
+				\item Update $\bxstep{k+1}_0 = \bxk_0 + \dxk_0$.
+			\end{enumerate}
+			
+			\item Output: $\bx^a = \bxstep{K}_0$
+		\end{enumerate}  &
+		\begin{enumerate}
+			\item Initialization: $\bxz = \bx^b$
+			
+			\item Repeat for $k = 0 \dots K-1$:
+			\begin{enumerate}
+				\item For each $\ioton$, compute $\bxk_i$ acc. to \eqref{eq:model} and $\bdk_i$ acc. to \eqref{eq:innov}.
+				
+				\item Use a gradient descent algorithm to minimize the \emph{restricted} cost function $\HJk$ with respect to $\dhxk_0$ ($\HJk$ is defined for $\bx_0 = \bxk_0$). 
+				
+				\item Update $\bxstep{k+1}_0 = \bxk_0 + \BV_0 \dhxk_0$.
+			\end{enumerate}
+			
+			\item Output: $\bx^a = \bxstep{K}_0$
+		\end{enumerate} \\
+		\hline
+	\end{tabularx}
+	\caption{Full and Restricted Incremental 4D-Var algorithms}
+	\label{tab:4dvar_restr}
+\end{table}
+
+\section{Appendix: proofs}
+
+\subsection*{Proof of equation \eqref{eq:lin_model_1}}
+
+Let $\iztonn$. If $\dx_i$ is small enough, we have the following approximation (Taylor's theorem):
+\begin{equation*}
+\begin{split}
+	\MM_i(\bx_i + \dx_i)
+		& \approx \MM_i(\bx_i) + \BM_i \dx_i \\
+		& = \bx_{i+1} + \BM_i \dx_i
+\end{split}
+\end{equation*}
+where $\BM_i$ denotes the Jacobian matrix of $\MM_i$ at state $\bx_i$.
+
+Using \eqref{eq:propag}, we get:
+\begin{equation*}
+	\dx_{i+1} = \BM_i \dx_i
+\end{equation*}
+
+\subsection*{Proof of equation \eqref{eq:lin_model_2}}
+
+Let $\izton$. If $\dx_i$ is small enough, we have the following approximation (Taylor's theorem):
+\begin{equation*}
+\begin{split}
+	\MH_i(\bx_i + \dx_i)
+		& \approx \MH_i(\bx_i) + \BH_i \dx_i \\
+		& = (\by_i - \bd_i) + \BH_i \dx_i
+\end{split}
+\end{equation*}
+where $\BH_i$ denotes the Jacobian matrix of $\MH_i$ at state $\bx_i$.
+
+Using \eqref{eq:innov_gap}, we get:
+\begin{equation*}
+\dd_i = \BH_i \dx_i
+\end{equation*}
+
+N.B.: There appears to be a mistake in the article, which states that $\bd_i = \BH_i \dx_i$.
+
+\subsection*{Proof of equation \eqref{eq:restr_model_1}}
+
+\subsection*{Proof of equation \eqref{eq:restr_model_2}}
+
+\bibliography{refs.bib}
+\bibliographystyle{apalike}
+
+\end{document}

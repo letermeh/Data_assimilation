@@ -1,0 +1,8 @@
+\contentsline {section}{\numberline {1}Introduction}{1}
+\contentsline {section}{\numberline {2}Background on Incremental 4D-Var}{1}
+\contentsline {subsection}{\numberline {2.1}Notations}{1}
+\contentsline {subsection}{\numberline {2.2}Linearization of the system}{2}
+\contentsline {subsection}{\numberline {2.3}Original versus Incremental 4D-Var algorithms}{2}
+\contentsline {section}{\numberline {3}Using Model Reduction in this context}{3}
+\contentsline {subsection}{\numberline {3.1}Notations}{3}
+\contentsline {section}{\numberline {4}Appendix: proofs}{4}
